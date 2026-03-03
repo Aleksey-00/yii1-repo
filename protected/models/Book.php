@@ -93,29 +93,6 @@ class Book extends CActiveRecord
     }
 
 
-    protected function afterSave()
-    {
-        parent::afterSave();
-
-        if ($this->isNewRecord) {
-            $authorIds = is_array($this->authors) ? $this->authors : [];
-
-            if (!empty($authorIds)) {
-                $subscribers = Yii::app()->db->createCommand()
-                    ->selectDistinct('phone')
-                    ->from('subscriptions')
-                    ->where(['in', 'author_id', $authorIds])
-                    ->queryColumn();
-
-                $sms = new SmsService();
-                foreach ($subscribers as $phone) {
-                    $message = "Вышла новая книга: " . $this->title;
-                    $sms->send($phone, $message);
-                }
-            }
-        }
-    }
-
     protected function afterFind()
     {
         parent::afterFind();
@@ -142,10 +119,8 @@ class Book extends CActiveRecord
         }
 
         if ($this->image) {
-            $filePath = Yii::getPathOfAlias('webroot') . '/uploads/' . $this->image;
-            if (file_exists($filePath)) {
-                unlink($filePath);
-            }
+            $storage = new ImageStorage();
+            $storage->deleteBookImage($this->image);
         }
 
         BookAuthor::model()->deleteAllByAttributes(array('book_id' => $this->id));

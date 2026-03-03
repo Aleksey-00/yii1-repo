@@ -23,3 +23,7 @@ vendor/
 composer.lock
 
 *.log
+
+.env
+
+.php-cs-fixer.cache

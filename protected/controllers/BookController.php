@@ -51,52 +51,14 @@ class BookController extends Controller
         if (isset($_POST['Book'])) {
             $model->attributes = $_POST['Book'];
             $file = CUploadedFile::getInstance($model, 'image');
-
-            if ($file) {
-                $fileName = time() . '_' . uniqid() . '_' . $file->name;
-                $model->image = $fileName;
-            }
+            $authorIds = isset($_POST['authorIds']) && is_array($_POST['authorIds']) ? $_POST['authorIds'] : array();
 
             if ($model->validate()) {
-                $transaction = Yii::app()->db->beginTransaction();
-                $path = Yii::getPathOfAlias('webroot') . '/uploads/';
-
                 try {
-                    if ($model->save(false)) {
-                        if ($file) {
-                            if (file_exists($path . $fileName)) {
-                                unlink($path . $fileName);
-                            }
-
-                            if (!$file->saveAs($path . $fileName)) {
-                                throw new Exception("Не удалось сохранить файл на диск");
-                            }
-                        }
-
-                        if (isset($_POST['authorIds']) && is_array($_POST['authorIds'])) {
-                            foreach (array_unique($_POST['authorIds']) as $authorId) { // array_unique защитит от дублей в POST
-                                $ba = new BookAuthor();
-                                $ba->book_id = $model->id;
-                                $ba->author_id = (int)$authorId;
-                                if (!$ba->save()) {
-                                    throw new Exception("Ошибка связи с автором");
-                                }
-                            }
-                        }
-
-                        $transaction->commit();
-                        $this->redirect(array('view', 'id' => $model->id));
-                    }
+                    $service = new BookService();
+                    $service->create($model, $file, $authorIds);
+                    $this->redirect(array('view', 'id' => $model->id));
                 } catch (Exception $e) {
-                    if ($transaction->active) {
-                        $transaction->rollback();
-                    }
-
-
-                    if ($file && file_exists($path . $fileName)) {
-                        unlink($path . $fileName);
-                    }
-
                     Yii::app()->user->setFlash('error', $e->getMessage());
                 }
             }
@@ -115,53 +77,21 @@ class BookController extends Controller
     {
         $model = $this->loadModel($id);
         $allAuthors = Author::model()->findAll();
-        $oldImage = $model->image;
 
         if (isset($_POST['Book'])) {
             $model->attributes = $_POST['Book'];
 
-
             $file = CUploadedFile::getInstance($model, 'image');
-            if ($file) {
-                $fileName = bin2hex(random_bytes(8)) . '.' . $file->extensionName;
-                $model->image = $fileName;
-            } else {
-                $model->image = $oldImage;
-            }
+            $authorIds = isset($_POST['authorIds']) && is_array($_POST['authorIds']) ? $_POST['authorIds'] : array();
 
-            $transaction = Yii::app()->db->beginTransaction();
-            try {
-                if ($model->save()) {
-
-                    if ($file) {
-                        $path = Yii::getPathOfAlias('webroot') . '/uploads/';
-                        if ($oldImage && file_exists($path . $oldImage)) {
-                            unlink($path . $oldImage);
-                        }
-                        $file->saveAs($path . $fileName);
-                    }
-
-
-                    BookAuthor::model()->deleteAllByAttributes(array('book_id' => $model->id));
-                    if (isset($_POST['authorIds']) && is_array($_POST['authorIds'])) {
-                        foreach (array_unique($_POST['authorIds']) as $authorId) {
-                            $ba = new BookAuthor();
-                            $ba->book_id = $model->id;
-                            $ba->author_id = (int)$authorId;
-                            if (!$ba->save()) {
-                                throw new Exception("Ошибка сохранения связи");
-                            }
-                        }
-                    }
-
-                    $transaction->commit();
+            if ($model->validate()) {
+                try {
+                    $service = new BookService();
+                    $service->update($model, $file, $authorIds);
                     $this->redirect(array('view', 'id' => $model->id));
+                } catch (Exception $e) {
+                    Yii::app()->user->setFlash('error', $e->getMessage());
                 }
-            } catch (Exception $e) {
-                if ($transaction->active) {
-                    $transaction->rollback();
-                }
-                Yii::app()->user->setFlash('error', $e->getMessage());
             }
         }
 
@@ -235,24 +165,20 @@ class BookController extends Controller
         }
     }
 
-    public function actionTop($year = 1991)
+    public function actionTop($year = null)
     {
-        $year = $year ? (int)$year : (int)date('Y');
+        if ($year === null) {
+            $year = (int)date('Y');
+        } else {
+            $year = (int)$year;
+        }
 
-        $sql = "SELECT a.id, a.fio, COUNT(ba.book_id) as book_count
-                FROM author a
-                INNER JOIN book_author ba ON a.id = ba.author_id
-                INNER JOIN book b ON ba.book_id = b.id
-                WHERE b.year = :year
-                GROUP BY a.id
-                ORDER BY book_count DESC
-                LIMIT 10";
-
-        $authors = Yii::app()->db->createCommand($sql)->queryAll(true, array(':year' => $year));
+        $repository = new AuthorRepository();
+        $authors = $repository->getTopAuthorsByYear($year);
 
         $this->render('top', array(
             'authors' => $authors,
-            'year' => $year
+            'year' => $year,
         ));
     }
 }

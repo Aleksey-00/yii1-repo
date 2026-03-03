@@ -27,8 +27,8 @@ return array(
         ),
 
         'sms' => array(
-           'class' => 'application.components.SmsService',
-           'apiKey' => 'AW8HWBA09C41RI2H5K50835BGSJY1SIH5J87V4O8BL51I1B1SO6SWHKH7I766VA7'
+            'class' => 'application.components.SmsService',
+            'apiKey' => getenv('SMS_API_KEY'),
         ),
 
 

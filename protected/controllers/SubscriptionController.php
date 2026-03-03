@@ -27,6 +27,6 @@ class SubscriptionController extends Controller
                 Yii::app()->user->setFlash('error', $errors[0][0]);
             }
         }
-        $this->redirect(Yii::app()->request->urlReferrer);
+        $this->redirect(Yii::app()->homeUrl);
     }
 }
